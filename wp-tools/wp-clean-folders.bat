@@ -3,7 +3,7 @@ setlocal EnableDelayedExpansion
 
 cd /d "%~dp0.."
 
-echo WP Clean Empty
+echo WP Clean Folders
 echo -----------------------------------------------------
 echo Eliminando carpetas vacias... (Ignorando las con ".")
 echo -----------------------------------------------------
