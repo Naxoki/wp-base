@@ -1,6 +1,8 @@
 @echo off
 setlocal EnableDelayedExpansion
 
+cd /d "%~dp0.."
+
 echo WP Clean Empty
 echo -----------------------------------------------------
 echo Eliminando carpetas vacias... (Ignorando las con ".")
@@ -9,7 +11,7 @@ echo.
 
 set "found=0"
 
-call :CleanFolder "%~dp0"
+call :CleanFolder "%CD%"
 
 if "%found%"=="0" echo Sin carpetas por eliminar.
 
