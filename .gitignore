@@ -29,6 +29,12 @@
 debug.log
 error_log
 
+# AI
+CLAUDE.md
+AGENTS.md
+.claude
+.agents
+
 # Others
 desktop.ini
 Thumbs.db
