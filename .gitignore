@@ -33,6 +33,18 @@ error_log
 desktop.ini
 Thumbs.db
 
+# AI assistants
+AGENTS.md
+CLAUDE.md
+.agents
+.codex*
+.claude*
+.cursor*
+.gemini
+.continue
+.windsurf
+.aider*
+
 # WordPress generic
 wp-config.php
 .htaccess
@@ -42,7 +54,7 @@ wp-content/upgrade/
 wp-content/backups/
 wp-content/cache/
 
-# WordPress drop-ins (POR REVISAR)
+# WordPress drop-ins
 wp-content/advanced-cache.php
 wp-content/object-cache.php
 wp-content/db.php
