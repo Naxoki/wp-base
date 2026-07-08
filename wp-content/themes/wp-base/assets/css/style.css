@@ -69,7 +69,7 @@
     --bs-border-color: var(--main-color-border);
 }
 /* Variables */
-/* Generic */
+/* General */
 html, body {
     height: 100%;
 }
@@ -91,7 +91,7 @@ a {
 a[href] {
     cursor: pointer;
 }
-/* Generic */
+/* General */
 /* Helpers */
 .lh-0 {
     line-height: 0px !important;
