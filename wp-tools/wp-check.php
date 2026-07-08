@@ -80,6 +80,12 @@ $checks = [
         'ok' => extension_loaded('mbstring'),
         'value' => extension_loaded('mbstring') ? 'Disponible' : 'No'
     ],
+	
+	[
+		'name' => 'zlib.output_compression',
+		'ok' => !ini_get('zlib.output_compression'),
+		'value' => ini_get('zlib.output_compression') ? 'On (recomendado Off para WP)' : 'Off'
+	],
 
 ];
 
