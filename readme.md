@@ -26,3 +26,9 @@ Base pre-cargada para sitios web.
 - [x] Chequeo de soporte para WP: wp-tools/wp-check.php
 - [ ] Setup inicial para BD: wp-tools/wp-setup-database.php
 - [x] Limpiador de carpetas vacias: wp-tools/wp-clean-folders.bat
+
+## Bug
+- [ ] Revisar titulos del header
+
+# Seguridad
+- [ ] Evitar el re-triggear del instalador de proyecto.
