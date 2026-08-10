@@ -162,14 +162,40 @@ function qs_instalar_wordpress( array $datos ): array {
 		1,
 		'',
 		$datos['admin_password'],
-		''
+		'',
+		$datos['language']
 	);
+
+	qs_instalar_idioma( $datos['language'] );
 
 	if ( wp_get_theme( 'wp-base' )->exists() ) {
 		switch_theme( 'wp-base' );
 	}
 
 	return $resultado;
+}
+
+/**
+ * Descarga e instala el paquete de idioma (traducciones del admin) y lo deja
+ * como idioma del sitio. wp_install() ya guarda la opción WPLANG con el
+ * locale recibido, pero sin el paquete descargado el admin se sigue viendo
+ * en inglés hasta que WordPress lo descarga solo en segundo plano.
+ */
+function qs_instalar_idioma( string $locale ): void {
+	if ( $locale === '' || $locale === 'en_US' ) {
+		return;
+	}
+
+	require_once ABSPATH . 'wp-admin/includes/translation-install.php';
+
+	if ( ! wp_can_install_language_pack() ) {
+		return;
+	}
+
+	$idioma_instalado = wp_download_language_pack( $locale );
+	if ( $idioma_instalado ) {
+		update_option( 'WPLANG', $idioma_instalado );
+	}
 }
 
 // ----------------------------------------
@@ -194,6 +220,7 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 			'admin_user'     => trim( $_POST['admin_user'] ?? 'admin' ),
 			'admin_password' => trim( $_POST['admin_password'] ?? '' ) ?: qs_password_segura(),
 			'admin_email'    => trim( $_POST['admin_email'] ?? '' ),
+			'language'       => trim( $_POST['site_language'] ?? '' ) ?: 'es_ES',
 			'salts'          => qs_generar_salts(),
 			'site_url'       => get_main_url( 'wp-tools' ),
 		);
@@ -208,6 +235,7 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 		$resultado['admin_password_generada'] = $datos['admin_password'];
 		$resultado['admin_user']              = $datos['admin_user'];
 		$resultado['db_name']                 = $datos['db_name'];
+		$resultado['language']                = $datos['language'];
 	} catch ( Throwable $e ) {
 		$error = 'Error al crear el proyecto: ' . $e->getMessage();
 	}
@@ -224,7 +252,7 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 		body { font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; color: #1a1a1a; }
 		h1 { font-size: 1.4rem; }
 		label { display: block; margin-top: 14px; font-weight: 600; font-size: 0.9rem; }
-		input { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; }
+		input, select { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; }
 		input[readonly] { background: #f0f0f0; color: #555; cursor: not-allowed; }
 		fieldset { border: 1px solid #e0e0e0; border-radius: 8px; margin-top: 24px; padding: 4px 16px 16px; }
 		legend { font-weight: 700; padding: 0 6px; }
@@ -238,7 +266,7 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 </head>
 <body>
 
-<h1>Setup rápido de proyecto WordPress</h1>
+<h1>🚀 Setup rápido de proyecto WordPress</h1>
 
 <?php if ( qs_ya_instalado() && ! $resultado ) : ?>
 	<div class="error">
@@ -252,6 +280,7 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 		<strong>✅ WordPress instalado correctamente.</strong>
 		<hr>
 		Base de datos: <code><?= htmlspecialchars( $resultado['db_name'] ) ?></code><br>
+		Idioma: <code><?= htmlspecialchars( $resultado['language'] ) ?></code><br>
 		Usuario admin: <code><?= htmlspecialchars( $resultado['admin_user'] ) ?></code><br>
 		Contraseña: <code><?= htmlspecialchars( $resultado['admin_password_generada'] ) ?></code>
 		<small>(guárdala, no se volverá a mostrar)</small>
@@ -273,6 +302,16 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 			</label>
 			<label>Título del sitio
 				<input type="text" name="site_title" placeholder="(usa el nombre del proyecto si lo dejas vacío)">
+			</label>
+			<label>Idioma del sitio
+				<select name="site_language">
+					<option value="es_ES" selected>Español (España)</option>
+					<option value="es_CL">Español (Chile)</option>
+					<option value="es_MX">Español (México)</option>
+					<option value="es_AR">Español (Argentina)</option>
+					<option value="en_US">English (US)</option>
+					<option value="pt_BR">Português (Brasil)</option>
+				</select>
 			</label>
 		</fieldset>
 
