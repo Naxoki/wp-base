@@ -285,6 +285,7 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 		Contraseña: <code><?= htmlspecialchars( $resultado['admin_password_generada'] ) ?></code>
 		<small>(guárdala, no se volverá a mostrar)</small>
 		<hr>
+		<a href="plugins-base.php">Instalar plugins base →</a><br>
 		<a href="<?= htmlspecialchars( get_main_url( 'wp-tools' ) ) ?>/wp-login.php">Ir al login de wp-admin →</a>
 	</div>
 
