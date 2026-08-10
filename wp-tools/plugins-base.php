@@ -1,11 +1,10 @@
 <?php
 /**
  * Archivo: plugins-base.php
- * Objetivo: Instalar el pool de plugins base del proyecto (sin activarlos —
- *           la activación queda manual, según lo que necesite cada sitio),
- *           descargándolos directamente desde wordpress.org con las mismas
- *           clases nativas que usa wp-admin (Plugin_Upgrader), sin
- *           commitear los plugins en el repo.
+ * Objetivo: Instalar el pool de plugins base del proyecto desde distintas
+ *           fuentes (wordpress.org o GitHub), decidiendo en el mismo paso
+ *           cuáles se activan y cuáles quedan solo instalados. Sin
+ *           commitear ningún plugin en el repo.
  *
  * Ubicacion: wp-tools/plugins-base.php (continúa el flujo de
  *            wp-quick-setup.php — se pensó para visitarse justo después).
@@ -17,24 +16,40 @@
 // ----------------------------------------
 // Lista de plugins base — editar libremente
 // ----------------------------------------
+//
+// 'fuente' => 'wordpress_org' usa el slug del repositorio oficial.
+// 'fuente' => 'github' usa la URL del repositorio (con o sin .git);
+//             se resuelve la rama por defecto y se descarga el zip.
+// 'activar' => true/false define si la casilla de "Activar" viene
+//              premarcada por defecto (siempre se puede cambiar al vuelo).
 
 $plugins_base = array(
-	'advanced-custom-fields' => 'Advanced Custom Fields',
-	'classic-editor'         => 'Classic Editor',
-	'wps-hide-login'         => 'WPS Hide Login',
-	'wp-migrate-db'          => 'WP Migrate Lite',
-);
-
-// Plugins premium / respaldados: no están en wordpress.org, no se pueden
-// descargar automáticamente por slug. Se instalan a mano subiendo el .zip
-// con licencia desde wp-admin, o completando 'url' con un storage privado
-// propio (incluso así, Plugin_Upgrader::install() acepta cualquier URL de
-// .zip directa, no solo wordpress.org).
-$plugins_premium = array(
-	'menu-editor-pro' => array(
-		'nombre' => 'Admin Menu Editor Pro',
-		'nota'   => 'No está en wordpress.org. Instalar manualmente el .zip con licencia desde wp-admin → Plugins → Añadir → Subir plugin.',
-		'url'    => '',
+	'classic-editor' => array(
+		'nombre'  => 'Classic Editor',
+		'fuente'  => 'wordpress_org',
+		'activar' => true,
+	),
+	'wps-hide-login' => array(
+		'nombre'  => 'WPS Hide Login',
+		'fuente'  => 'wordpress_org',
+		'activar' => false,
+	),
+	'wp-migrate-db' => array(
+		'nombre'  => 'WP Migrate Lite',
+		'fuente'  => 'wordpress_org',
+		'activar' => false,
+	),
+	'advanced-custom-fields-pro' => array(
+		'nombre'  => 'Advanced Custom Fields PRO',
+		'fuente'  => 'github',
+		'url'     => 'https://github.com/pronamic/advanced-custom-fields-pro.git',
+		'activar' => false,
+	),
+	'admin-menu-editor-pro' => array(
+		'nombre'  => 'Admin Menu Editor Pro',
+		'fuente'  => 'github',
+		'url'     => 'https://github.com/Naxoki/admin-menu-editor-pro.git',
+		'activar' => false,
 	),
 );
 
@@ -85,75 +100,120 @@ function pb_encontrar_archivo_principal( string $slug ): ?string {
 	return null;
 }
 
+/**
+ * Convierte una URL de repo de GitHub (con o sin .git) en la URL del zip de
+ * su rama por defecto, resolviendo la rama vía la API de GitHub.
+ */
+function pb_github_zip_url( string $repo_url ): ?string {
+	if ( ! preg_match( '#github\.com/([^/]+)/([^/.]+)#', $repo_url, $coincidencia ) ) {
+		return null;
+	}
+	$owner = $coincidencia[1];
+	$repo  = $coincidencia[2];
+
+	$respuesta = wp_remote_get( "https://api.github.com/repos/{$owner}/{$repo}", array(
+		'headers' => array( 'User-Agent' => 'wp-tools-plugins-base' ),
+		'timeout' => 15,
+	) );
+
+	if ( is_wp_error( $respuesta ) ) {
+		return null;
+	}
+
+	$datos = json_decode( wp_remote_retrieve_body( $respuesta ), true );
+	$rama  = $datos['default_branch'] ?? 'main';
+
+	return "https://github.com/{$owner}/{$repo}/archive/refs/heads/{$rama}.zip";
+}
+
 // ----------------------------------------
 // Helpers de accion
 // ----------------------------------------
 
 /**
- * Instala un plugin por su slug de wordpress.org, sin activarlo — la
- * activación queda a criterio manual, según lo que necesite cada sitio.
- * Devuelve siempre ['ok' => bool, 'mensaje' => string].
+ * Instala un plugin desde wordpress.org por su slug. No activa.
+ * Devuelve ['ok' => bool, 'mensaje' => string, 'archivo' => string|null].
  */
-function pb_procesar_plugin( string $slug ): array {
-	$archivo_existente = pb_encontrar_archivo_principal( $slug );
-
-	if ( $archivo_existente ) {
-		return array( 'ok' => true, 'mensaje' => 'Ya estaba instalado.' );
-	}
-
-	// Buscar el plugin en el repositorio oficial.
+function pb_instalar_desde_wordpress_org( string $slug ): array {
 	$info = plugins_api( 'plugin_information', array(
 		'slug'   => $slug,
 		'fields' => array( 'sections' => false ),
 	) );
 
 	if ( is_wp_error( $info ) ) {
-		return array( 'ok' => false, 'mensaje' => 'No se encontró en wordpress.org: ' . $info->get_error_message() );
-	}
-
-	// Descargar e instalar, en modo silencioso (sin la UI de wp-admin).
-	$skin     = new PB_Silent_Skin();
-	$upgrader = new Plugin_Upgrader( $skin );
-	$resultado = $upgrader->install( $info->download_link );
-
-	if ( is_wp_error( $resultado ) ) {
-		return array( 'ok' => false, 'mensaje' => 'Error al instalar: ' . $resultado->get_error_message() );
-	}
-	if ( $resultado !== true ) {
-		return array( 'ok' => false, 'mensaje' => 'No se pudo instalar (revisa permisos de escritura en wp-content/plugins).' );
-	}
-
-	return array( 'ok' => true, 'mensaje' => 'Instalado (sin activar).' );
-}
-
-/**
- * Instala un plugin premium desde un .zip accesible por URL (storage propio,
- * no wordpress.org), sin activarlo. Mismo mecanismo de Plugin_Upgrader, sin
- * pasar por plugins_api() porque estos plugins no están en el repositorio
- * oficial.
- */
-function pb_procesar_plugin_desde_zip( string $slug, string $url ): array {
-	if ( $url === '' ) {
-		return array( 'ok' => false, 'mensaje' => 'Sin URL configurada — instalar manualmente el .zip desde wp-admin.' );
-	}
-
-	$archivo_existente = pb_encontrar_archivo_principal( $slug );
-	if ( $archivo_existente ) {
-		return array( 'ok' => true, 'mensaje' => 'Ya estaba instalado.' );
+		return array( 'ok' => false, 'mensaje' => 'No se encontró en wordpress.org: ' . $info->get_error_message(), 'archivo' => null );
 	}
 
 	$skin      = new PB_Silent_Skin();
 	$upgrader  = new Plugin_Upgrader( $skin );
-	$resultado = $upgrader->install( $url );
+	$resultado = $upgrader->install( $info->download_link );
 
 	if ( is_wp_error( $resultado ) ) {
-		return array( 'ok' => false, 'mensaje' => 'Error al instalar: ' . $resultado->get_error_message() );
+		return array( 'ok' => false, 'mensaje' => 'Error al instalar: ' . $resultado->get_error_message(), 'archivo' => null );
 	}
 	if ( $resultado !== true ) {
-		return array( 'ok' => false, 'mensaje' => 'No se pudo instalar (revisa la URL o permisos de escritura).' );
+		return array( 'ok' => false, 'mensaje' => 'No se pudo instalar (revisa permisos de escritura en wp-content/plugins).', 'archivo' => null );
 	}
 
-	return array( 'ok' => true, 'mensaje' => 'Instalado (sin activar).' );
+	return array( 'ok' => true, 'mensaje' => 'Instalado.', 'archivo' => $upgrader->plugin_info() );
+}
+
+/**
+ * Instala un plugin desde un repositorio de GitHub. No activa.
+ * Renombra la carpeta resultante ("repo-rama") al slug esperado.
+ * Devuelve ['ok' => bool, 'mensaje' => string, 'archivo' => string|null].
+ */
+function pb_instalar_desde_github( string $slug, string $repo_url ): array {
+	$zip_url = pb_github_zip_url( $repo_url );
+	if ( ! $zip_url ) {
+		return array( 'ok' => false, 'mensaje' => 'No se pudo resolver la URL de descarga de GitHub.', 'archivo' => null );
+	}
+
+	$skin      = new PB_Silent_Skin();
+	$upgrader  = new Plugin_Upgrader( $skin );
+	$resultado = $upgrader->install( $zip_url );
+
+	if ( is_wp_error( $resultado ) ) {
+		return array( 'ok' => false, 'mensaje' => 'Error al instalar desde GitHub: ' . $resultado->get_error_message(), 'archivo' => null );
+	}
+	if ( $resultado !== true ) {
+		return array( 'ok' => false, 'mensaje' => 'No se pudo instalar desde GitHub (revisa permisos de escritura).', 'archivo' => null );
+	}
+
+	$archivo_instalado = $upgrader->plugin_info();
+	if ( ! $archivo_instalado ) {
+		return array( 'ok' => true, 'mensaje' => 'Se instaló, pero no se identificó el archivo principal.', 'archivo' => null );
+	}
+
+	// GitHub arma la carpeta como "repo-rama" (ej: admin-menu-editor-pro-main).
+	// Se renombra al slug esperado para que quede prolija y sea reconocible después.
+	$carpeta_actual = dirname( $archivo_instalado );
+	if ( $carpeta_actual !== $slug && $carpeta_actual !== '.' ) {
+		$origen  = WP_PLUGIN_DIR . '/' . $carpeta_actual;
+		$destino = WP_PLUGIN_DIR . '/' . $slug;
+		if ( ! file_exists( $destino ) && @rename( $origen, $destino ) ) {
+			$archivo_instalado = str_replace( $carpeta_actual . '/', $slug . '/', $archivo_instalado );
+		}
+	}
+
+	return array( 'ok' => true, 'mensaje' => 'Instalado desde GitHub.', 'archivo' => $archivo_instalado );
+}
+
+/**
+ * Instala un plugin desde la fuente que corresponda, o detecta que ya
+ * estaba instalado. No activa — eso lo decide el llamador.
+ */
+function pb_instalar_plugin( string $slug, array $datos_plugin ): array {
+	$archivo_existente = pb_encontrar_archivo_principal( $slug );
+	if ( $archivo_existente ) {
+		return array( 'ok' => true, 'mensaje' => 'Ya estaba instalado.', 'archivo' => $archivo_existente );
+	}
+
+	if ( $datos_plugin['fuente'] === 'github' ) {
+		return pb_instalar_desde_github( $slug, $datos_plugin['url'] );
+	}
+
+	return pb_instalar_desde_wordpress_org( $slug );
 }
 
 // ----------------------------------------
@@ -206,15 +266,19 @@ class PB_Silent_Skin extends WP_Upgrader_Skin {
 	<title>Plugins base — WP Base</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<style>
-		body { font-family: system-ui, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; color: #1a1a1a; }
+		body { font-family: system-ui, sans-serif; max-width: 680px; margin: 60px auto; padding: 0 20px; color: #1a1a1a; }
 		h1 { font-size: 1.4rem; }
-		label { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee; }
+		.fila { display: flex; align-items: center; gap: 20px; padding: 10px 0; border-bottom: 1px solid #eee; }
+		.fila .nombre { flex: 1; }
+		.fila .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; background: #eee; color: #555; margin-left: 6px; }
+		.fila label { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; white-space: nowrap; }
 		button { margin-top: 24px; padding: 10px 20px; background: #1a1a1a; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.95rem; }
 		ul.log { list-style: none; padding: 0; margin-top: 20px; }
 		ul.log li { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; }
 		ul.log li.ok { background: #e8f5e9; color: #1b5e20; }
 		ul.log li.error { background: #fdecea; color: #611a15; }
 		.success { background: #e8f5e9; color: #1b5e20; padding: 16px; border-radius: 6px; margin-top: 20px; }
+		.warning { background: #fff3cd; color: #664d03; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; }
 		a.next-step { display: inline-block; margin-top: 8px; }
 	</style>
 </head>
@@ -223,59 +287,49 @@ class PB_Silent_Skin extends WP_Upgrader_Skin {
 <h1>🔌 Plugins base</h1>
 
 <?php if ( ! pb_es_post() ) : ?>
-	<div style="background:#fff3cd; color:#664d03; padding:12px 16px; border-radius:6px; margin-bottom:16px;">
-		⚠️ Estos plugins quedan <strong>instalados pero no activados</strong> — la activación es manual,
-		según lo que necesite cada sitio. Ojo en particular con <strong>WPS Hide Login</strong>: al
-		activarlo cambia la URL de <code>/wp-login.php</code>, así que entra de inmediato a
-		<em>Ajustes → WPS Hide Login</em> para confirmar o cambiar la nueva URL antes de cerrar sesión —
-		si la pierdes, la única forma de recuperar el acceso es renombrar la carpeta del plugin por
-		FTP/administrador de archivos.
+	<div class="warning">
+		⚠️ <strong>WPS Hide Login</strong>: si lo activas, cambia la URL de <code>/wp-login.php</code> de
+		inmediato. Entra a <em>Ajustes → WPS Hide Login</em> para confirmar o cambiar la nueva URL antes
+		de cerrar sesión — si la pierdes, la única forma de recuperar el acceso es renombrar la carpeta
+		del plugin por FTP/administrador de archivos.
 	</div>
 <?php endif; ?>
 
 <?php if ( pb_es_post() ) : ?>
 
-	<p>Instalando...</p>
+	<p>Procesando...</p>
 	<ul class="log">
 	<?php
 	// Salida progresiva: cada plugin se procesa y se imprime antes de seguir
-	// con el siguiente, en vez de esperar a tener todos los resultados.
-	// Nota: para que se vea en vivo (no todo junto al final), zlib.output_compression
-	// debe estar en Off — lo mismo que ya valida wp-tools/wp-check.php.
-	$seleccionados = isset( $_POST['plugins'] ) && is_array( $_POST['plugins'] ) ? $_POST['plugins'] : array();
+	// con el siguiente. Requiere zlib.output_compression en Off (lo mismo
+	// que ya valida wp-tools/wp-check.php) para verse en vivo.
+	$a_instalar = isset( $_POST['instalar'] ) && is_array( $_POST['instalar'] ) ? array_map( 'sanitize_key', $_POST['instalar'] ) : array();
+	$a_activar  = isset( $_POST['activar'] ) && is_array( $_POST['activar'] ) ? array_map( 'sanitize_key', $_POST['activar'] ) : array();
 
-	foreach ( $seleccionados as $slug ) {
-		$slug = sanitize_key( $slug );
+	foreach ( $a_instalar as $slug ) {
 		if ( ! isset( $plugins_base[ $slug ] ) ) {
 			continue;
 		}
+		$datos_plugin = $plugins_base[ $slug ];
 
-		$resultado = pb_procesar_plugin( $slug );
-		$clase     = $resultado['ok'] ? 'ok' : 'error';
-		$icono     = $resultado['ok'] ? '✅' : '⚠️';
+		$resultado = pb_instalar_plugin( $slug, $datos_plugin );
+		$mensaje   = $resultado['mensaje'];
 
-		echo '<li class="' . esc_attr( $clase ) . '">' . $icono . ' <strong>' . esc_html( $plugins_base[ $slug ] ) . '</strong>: ' . esc_html( $resultado['mensaje'] ) . '</li>';
-
-		if ( ob_get_level() > 0 ) {
-			@ob_flush();
-		}
-		flush();
-	}
-
-	$premium_seleccionados = isset( $_POST['plugins_premium'] ) && is_array( $_POST['plugins_premium'] ) ? $_POST['plugins_premium'] : array();
-
-	foreach ( $premium_seleccionados as $slug ) {
-		$slug = sanitize_key( $slug );
-		if ( ! isset( $plugins_premium[ $slug ] ) ) {
-			continue;
+		if ( $resultado['ok'] && $resultado['archivo'] && in_array( $slug, $a_activar, true ) ) {
+			if ( is_plugin_active( $resultado['archivo'] ) ) {
+				$mensaje .= ' Ya estaba activo.';
+			} else {
+				$activado = activate_plugin( $resultado['archivo'] );
+				$mensaje .= is_wp_error( $activado )
+					? ( ' No se pudo activar: ' . $activado->get_error_message() )
+					: ' Activado.';
+			}
 		}
 
-		$datos_plugin = $plugins_premium[ $slug ];
-		$resultado    = pb_procesar_plugin_desde_zip( $slug, $datos_plugin['url'] );
-		$clase        = $resultado['ok'] ? 'ok' : 'error';
-		$icono        = $resultado['ok'] ? '✅' : '⚠️';
+		$clase = $resultado['ok'] ? 'ok' : 'error';
+		$icono = $resultado['ok'] ? '✅' : '⚠️';
 
-		echo '<li class="' . esc_attr( $clase ) . '">' . $icono . ' <strong>' . esc_html( $datos_plugin['nombre'] ) . '</strong> <small>(premium)</small>: ' . esc_html( $resultado['mensaje'] ) . '</li>';
+		echo '<li class="' . esc_attr( $clase ) . '">' . $icono . ' <strong>' . esc_html( $datos_plugin['nombre'] ) . '</strong>: ' . esc_html( $mensaje ) . '</li>';
 
 		if ( ob_get_level() > 0 ) {
 			@ob_flush();
@@ -286,39 +340,28 @@ class PB_Silent_Skin extends WP_Upgrader_Skin {
 	</ul>
 
 	<div class="success">
-		<strong>Listo.</strong> Quedaron instalados (sin activar) — revisa el detalle de cada uno arriba.<br>
-		<a class="next-step" href="<?= htmlspecialchars( get_main_url( 'wp-tools' ) ) ?>/wp-admin/plugins.php">Activar los que necesites en wp-admin →</a><br>
+		<strong>Listo.</strong> Revisa el detalle de cada plugin arriba.<br>
+		<a class="next-step" href="<?= htmlspecialchars( get_main_url( 'wp-tools' ) ) ?>/wp-admin/plugins.php">Ver plugins en wp-admin →</a><br>
 		<a class="next-step" href="examples.php">Ir a examples.php →</a>
 	</div>
 
 <?php else : ?>
 
-	<p>Selecciona qué plugins instalar (quedan instalados, sin activar — se descargan directo desde wordpress.org, no viven en el repo).</p>
+	<p>Marca qué instalar y, en la misma pasada, qué activar de una vez.</p>
 
 	<form method="POST">
-		<?php foreach ( $plugins_base as $slug => $nombre ) : ?>
-			<label>
-				<input type="checkbox" name="plugins[]" value="<?= esc_attr( $slug ) ?>" checked>
-				<?= esc_html( $nombre ) ?> <small style="color:#888">(<?= esc_html( $slug ) ?>)</small>
-			</label>
+		<?php foreach ( $plugins_base as $slug => $datos_plugin ) : ?>
+			<div class="fila">
+				<span class="nombre">
+					<?= esc_html( $datos_plugin['nombre'] ) ?>
+					<span class="badge"><?= $datos_plugin['fuente'] === 'github' ? 'GitHub' : 'wordpress.org' ?></span>
+				</span>
+				<label><input type="checkbox" name="instalar[]" value="<?= esc_attr( $slug ) ?>" checked> Instalar</label>
+				<label><input type="checkbox" name="activar[]" value="<?= esc_attr( $slug ) ?>" <?= $datos_plugin['activar'] ? 'checked' : '' ?>> Activar</label>
+			</div>
 		<?php endforeach; ?>
 
-		<button type="submit">Instalar seleccionados</button>
-	</form>
-
-	<h2 style="margin-top:32px;">Plugins premium / respaldados</h2>
-	<p><small>No están en wordpress.org — solo se pueden auto-instalar si les agregas una URL de descarga privada en el array <code>$plugins_premium</code> del script. Sin URL, hay que subir el .zip a mano desde wp-admin.</small></p>
-
-	<form method="POST">
-		<?php foreach ( $plugins_premium as $slug => $datos_plugin ) : ?>
-			<label>
-				<input type="checkbox" name="plugins_premium[]" value="<?= esc_attr( $slug ) ?>" <?= $datos_plugin['url'] ? 'checked' : 'disabled' ?>>
-				<?= esc_html( $datos_plugin['nombre'] ) ?>
-				<small style="color:#888">— <?= esc_html( $datos_plugin['nota'] ) ?></small>
-			</label>
-		<?php endforeach; ?>
-
-		<button type="submit" <?= array_filter( $plugins_premium, fn( $p ) => $p['url'] ) ? '' : 'disabled' ?>>Instalar premium seleccionados</button>
+		<button type="submit">Procesar</button>
 	</form>
 
 <?php endif; ?>
