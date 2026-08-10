@@ -34,8 +34,13 @@ $plugins_base = array(
 		'fuente'  => 'wordpress_org',
 		'activar' => false,
 	),
-	'wp-migrate-db' => array(
-		'nombre'  => 'WP Migrate Lite',
+	'contact-form-7' => array(
+		'nombre'  => 'Contact Form 7',
+		'fuente'  => 'wordpress_org',
+		'activar' => false,
+	),
+	'custom-post-type-ui' => array(
+		'nombre'  => 'Custom Post Type UI',
 		'fuente'  => 'wordpress_org',
 		'activar' => false,
 	),
@@ -49,6 +54,12 @@ $plugins_base = array(
 		'nombre'  => 'Admin Menu Editor Pro',
 		'fuente'  => 'github',
 		'url'     => 'https://github.com/Naxoki/admin-menu-editor-pro.git',
+		'activar' => false,
+	),
+	'wp-migrate-db-pro' => array(
+		'nombre'  => 'WP Migrate DB Pro',
+		'fuente'  => 'github',
+		'url'     => 'https://github.com/Naxoki/wp-migrate-db-pro.git',
 		'activar' => false,
 	),
 );
