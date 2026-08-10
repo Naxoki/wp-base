@@ -32,3 +32,4 @@ Base pre-cargada para sitios web.
 
 # Seguridad
 - [ ] Evitar el re-triggear del instalador de proyecto.
+- [ ] Agregar al wp-check.php la visualizacion de xmlrpc.php

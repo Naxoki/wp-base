@@ -32,8 +32,8 @@ error_log
 # AI
 CLAUDE.md
 AGENTS.md
-.claude
-.agents
+.claude/
+.agents/
 
 # Others
 desktop.ini
