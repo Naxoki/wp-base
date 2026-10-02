@@ -16,6 +16,8 @@ Base pre-cargada para sitios web.
    git clone https://github.com/Naxoki/wp-base.git nombre-del-proyecto
    cd nombre-del-proyecto
    ```
+   **para una rama especifica**
+   - git clone -b NOMBRE-RAMA https://github.com/Naxoki/wp-base.git
 
 2. Iniciar Apache y MySQL.
 
