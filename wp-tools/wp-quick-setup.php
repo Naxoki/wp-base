@@ -144,6 +144,31 @@ function qs_escribir_wp_config( array $datos ): void {
 	}
 }
 
+/**
+ * Reemplaza en el .htaccess la regla de localhost (RewriteRule . /wp-base/index.php [L])
+ * por la carpeta real del proyecto, para que las URL amigables funcionen en
+ * http://localhost/<carpeta>/. Si el .htaccess no existe o no trae la regla, no hace nada.
+ */
+function qs_actualizar_htaccess( string $carpeta_proyecto ): void {
+	$ruta = dirname( __DIR__ ) . '/.htaccess';
+
+	if ( ! file_exists( $ruta ) ) {
+		return;
+	}
+
+	$contenido = file_get_contents( $ruta );
+	$nuevo     = preg_replace(
+		'#^(RewriteRule \.\s+)/[^/\s]+/index\.php(\s+\[L\])#m',
+		'${1}/' . $carpeta_proyecto . '/index.php${2}',
+		$contenido,
+		1
+	);
+
+	if ( $nuevo !== null && $nuevo !== $contenido && file_put_contents( $ruta, $nuevo ) === false ) {
+		throw new Exception( 'No se pudo escribir .htaccess (revisa permisos de escritura en la carpeta raíz).' );
+	}
+}
+
 function qs_instalar_wordpress( array $datos ): array {
 	$raiz = dirname( __DIR__ );
 
@@ -231,6 +256,7 @@ if ( qs_es_post() && ! qs_ya_instalado() ) {
 
 		qs_crear_base_datos( $datos['db_host'], $datos['db_user'], $datos['db_password'], $datos['db_name'], $datos['db_collation'] );
 		qs_escribir_wp_config( $datos );
+		qs_actualizar_htaccess( $carpeta_proyecto );
 		$resultado = qs_instalar_wordpress( $datos );
 		$resultado['admin_password_generada'] = $datos['admin_password'];
 		$resultado['admin_user']              = $datos['admin_user'];
